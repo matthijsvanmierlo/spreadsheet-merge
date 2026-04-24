@@ -48,13 +48,6 @@
       display: none !important;
     }
 
-    /* Hide the PDF container completely from the user view */
-    #pdf-hidden-container {
-      position: absolute;
-      left: -9999px;
-      top: -9999px;
-    }
-
     /* Mobile layout improvements */
     .ql-toolbar {
       overflow-x: auto;
@@ -208,9 +201,6 @@
       </div>
     </div>
   </section>
-
-  <!-- Hidden Div for PDF Generation -->
-  <div id="pdf-hidden-container"></div>
 
   <!-- Data Source 5-Row Preview Modal -->
   <div class="modal" id="data-preview-modal">
@@ -654,21 +644,16 @@
         return;
       }
 
-      const pdfContainer = document.getElementById('pdf-hidden-container');
-      pdfContainer.innerHTML = ''; // clear old content
+      let finalHtml = '';
 
       // Append all merged documents separated by page breaks
       csvData.forEach((row, index) => {
         const mergedHtml = template(row);
-        const docDiv = document.createElement('div');
-        docDiv.innerHTML = mergedHtml;
-        pdfContainer.appendChild(docDiv);
+        finalHtml += `<div>${mergedHtml}</div>`;
 
         // Add page break if it's not the last document
         if (index < csvData.length - 1) {
-          const pageBreak = document.createElement('div');
-          pageBreak.style.pageBreakBefore = 'always';
-          pdfContainer.appendChild(pageBreak);
+          finalHtml += '<div style="page-break-before: always;"></div>';
         }
       });
 
@@ -682,12 +667,9 @@
 
       try {
         // html2pdf returns a promise
-        await html2pdf().set(opt).from(pdfContainer).save();
-        // Cleanup after generation
-        pdfContainer.innerHTML = '';
+        await html2pdf().set(opt).from(finalHtml).save();
       } catch (e) {
         showError("Error generating PDF: " + e.message);
-        pdfContainer.innerHTML = '';
       }
     }
   </script>
