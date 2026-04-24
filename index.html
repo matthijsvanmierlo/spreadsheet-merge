@@ -54,6 +54,19 @@
       left: -9999px;
       top: -9999px;
     }
+
+    /* Mobile layout improvements */
+    .ql-toolbar {
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .file-name {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -78,12 +91,12 @@
       <div class="columns">
 
         <!-- Left Column (30% width): Data Management & Controls -->
-        <div class="column is-3">
+        <div class="column is-12-mobile is-3-tablet">
 
           <!-- File Upload Box -->
           <div class="box">
             <h3 class="title is-5">1. Data Source</h3>
-            <div class="file has-name is-fullwidth">
+            <div class="file has-name is-fullwidth" style="margin-bottom: 10px;">
               <label class="file-label">
                 <input class="file-input" type="file" id="csv-file" accept=".csv">
                 <span class="file-cta">
@@ -95,6 +108,14 @@
                 <span class="file-name" id="file-name-display">No file uploaded</span>
               </label>
             </div>
+            <button class="button is-small is-info is-light is-fullwidth" id="btn-load-example">
+              <span class="icon"><i class="fas fa-magic"></i></span>
+              <span>Load Example Data</span>
+            </button>
+            <button class="button is-small is-primary is-light is-fullwidth mt-2" id="btn-preview-data" disabled>
+              <span class="icon"><i class="fas fa-table"></i></span>
+              <span>Preview First 5 Rows</span>
+            </button>
           </div>
 
           <!-- Merge Tags Panel -->
@@ -111,7 +132,7 @@
           <!-- Export Controls -->
           <div class="box">
             <h3 class="title is-5">3. Export</h3>
-            <div class="buttons">
+            <div class="buttons is-flex-wrap-wrap">
               <button class="button is-primary is-fullwidth" id="btn-export-zip" disabled>
                 <span class="icon"><i class="fas fa-file-archive"></i></span>
                 <span>Export as HTML (ZIP)</span>
@@ -126,7 +147,7 @@
         </div>
 
         <!-- Right Column (70% width): Template & Preview Area -->
-        <div class="column is-9">
+        <div class="column is-12-mobile is-9-tablet">
 
           <div class="box">
             <!-- Tabs -->
@@ -169,6 +190,30 @@
 
   <!-- Hidden Div for PDF Generation -->
   <div id="pdf-hidden-container"></div>
+
+  <!-- Data Source 5-Row Preview Modal -->
+  <div class="modal" id="data-preview-modal">
+    <div class="modal-background" onclick="closeDataPreview()"></div>
+    <div class="modal-card">
+      <header class="modal-card-head">
+        <p class="modal-card-title">Data Preview (First 5 Rows)</p>
+        <button class="delete" aria-label="close" onclick="closeDataPreview()"></button>
+      </header>
+      <section class="modal-card-body">
+        <div class="table-container">
+          <table class="table is-fullwidth is-striped is-hoverable" id="data-preview-table">
+            <thead>
+              <tr id="data-preview-thead-tr"></tr>
+            </thead>
+            <tbody id="data-preview-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+      <footer class="modal-card-foot">
+        <button class="button" onclick="closeDataPreview()">Close</button>
+      </footer>
+    </div>
+  </div>
 
   <!-- JS Libraries -->
   <!-- CSV Parsing: PapaParse -->
@@ -240,6 +285,16 @@
 
       const btnPdf = document.getElementById('btn-export-pdf');
       btnPdf.addEventListener('click', exportToPdf);
+
+      const btnExample = document.getElementById('btn-load-example');
+      if (btnExample) {
+        btnExample.addEventListener('click', loadExampleData);
+      }
+
+      const btnPreviewData = document.getElementById('btn-preview-data');
+      if (btnPreviewData) {
+        btnPreviewData.addEventListener('click', showDataPreview);
+      }
     }
 
     /**
@@ -261,6 +316,38 @@
      */
     function clearError() {
       document.getElementById('notification-area').innerHTML = '';
+    }
+
+    /**
+     * Loads example data, populates the template, and switches to preview.
+     */
+    function loadExampleData() {
+      clearError();
+      document.getElementById('file-name-display').textContent = "example_data.csv";
+
+      csvData = [
+        { firstName: "Jane", lastName: "Doe", email: "jane.doe@example.com", role: "Manager", start_date: "2023-01-15" },
+        { firstName: "John", lastName: "Smith", email: "john.smith@example.com", role: "Developer", start_date: "2023-02-01" },
+        { firstName: "Alice", lastName: "Johnson", email: "alice.j@example.com", role: "Designer", start_date: "2023-03-10" }
+      ];
+      csvHeaders = ['firstName', 'lastName', 'email', 'role', 'start_date'];
+
+      renderMergeTags();
+      enableExportButtons();
+
+      const exampleTemplate = `
+        <h1>Welcome, {{firstName}} {{lastName}}!</h1>
+        <p>We are thrilled to have you on board as our new <strong>{{role}}</strong>.</p>
+        <p>Your official start date is recorded as {{start_date}}.</p>
+        <p>Please ensure you have access to your company email: <a href="mailto:{{email}}">{{email}}</a>.</p>
+        <br>
+        <p>Best regards,<br>The HR Team</p>
+      `;
+
+      const delta = quillEditor.clipboard.convert(exampleTemplate);
+      quillEditor.setContents(delta, 'silent');
+
+      switchTab('preview');
     }
 
     /**
@@ -345,7 +432,50 @@
     function enableExportButtons() {
       document.getElementById('btn-export-zip').disabled = false;
       document.getElementById('btn-export-pdf').disabled = false;
+      document.getElementById('btn-preview-data').disabled = false;
       // Note: Preview tab is always clickable, but we update its visual state if needed
+    }
+
+    /**
+     * Shows the data preview modal with up to 5 rows of data.
+     */
+    function showDataPreview() {
+      if (!csvData || csvData.length === 0) return;
+
+      const theadTr = document.getElementById('data-preview-thead-tr');
+      const tbody = document.getElementById('data-preview-tbody');
+
+      theadTr.innerHTML = '';
+      tbody.innerHTML = '';
+
+      // Populate headers
+      csvHeaders.forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        theadTr.appendChild(th);
+      });
+
+      // Populate up to 5 rows
+      const rowsToShow = Math.min(5, csvData.length);
+      for (let i = 0; i < rowsToShow; i++) {
+        const rowData = csvData[i];
+        const tr = document.createElement('tr');
+        csvHeaders.forEach(header => {
+          const td = document.createElement('td');
+          td.textContent = rowData[header] || '';
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      }
+
+      document.getElementById('data-preview-modal').classList.add('is-active');
+    }
+
+    /**
+     * Closes the data preview modal.
+     */
+    function closeDataPreview() {
+      document.getElementById('data-preview-modal').classList.remove('is-active');
     }
 
     /**
