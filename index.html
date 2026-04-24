@@ -129,9 +129,30 @@
             </div>
           </nav>
 
+          <!-- Template Management Controls -->
+          <div class="box">
+            <h3 class="title is-5">3. Template Management</h3>
+            <div class="file has-name is-fullwidth is-small" style="margin-bottom: 10px;">
+              <label class="file-label">
+                <input class="file-input" type="file" id="template-file" accept=".html,.txt">
+                <span class="file-cta">
+                  <span class="file-icon">
+                    <i class="fas fa-file-import"></i>
+                  </span>
+                  <span class="file-label">Import Template...</span>
+                </span>
+                <span class="file-name" id="template-name-display">No template uploaded</span>
+              </label>
+            </div>
+            <button class="button is-small is-info is-fullwidth" id="btn-export-template">
+              <span class="icon"><i class="fas fa-file-export"></i></span>
+              <span>Export Template</span>
+            </button>
+          </div>
+
           <!-- Export Controls -->
           <div class="box">
-            <h3 class="title is-5">3. Export</h3>
+            <h3 class="title is-5">4. Export</h3>
             <div class="buttons is-flex-wrap-wrap">
               <button class="button is-primary is-fullwidth" id="btn-export-zip" disabled>
                 <span class="icon"><i class="fas fa-file-archive"></i></span>
@@ -295,6 +316,16 @@
       if (btnPreviewData) {
         btnPreviewData.addEventListener('click', showDataPreview);
       }
+
+      const templateInput = document.getElementById('template-file');
+      if (templateInput) {
+        templateInput.addEventListener('change', handleTemplateUpload);
+      }
+
+      const btnExportTemplate = document.getElementById('btn-export-template');
+      if (btnExportTemplate) {
+        btnExportTemplate.addEventListener('click', exportTemplate);
+      }
     }
 
     /**
@@ -336,10 +367,10 @@
       enableExportButtons();
 
       const exampleTemplate = `
-        <h1>Welcome, {{firstName}} {{lastName}}!</h1>
-        <p>We are thrilled to have you on board as our new <strong>{{role}}</strong>.</p>
-        <p>Your official start date is recorded as {{start_date}}.</p>
-        <p>Please ensure you have access to your company email: <a href="mailto:{{email}}">{{email}}</a>.</p>
+        <h1>Welcome, {{[firstName]}} {{[lastName]}}!</h1>
+        <p>We are thrilled to have you on board as our new <strong>{{[role]}}</strong>.</p>
+        <p>Your official start date is recorded as {{[start_date]}}.</p>
+        <p>Please ensure you have access to your company email: <a href="mailto:{{[email]}}">{{[email]}}</a>.</p>
         <br>
         <p>Best regards,<br>The HR Team</p>
       `;
@@ -400,7 +431,7 @@
       csvHeaders.forEach(header => {
         const tag = document.createElement('span');
         tag.className = 'tag is-info is-light merge-tag';
-        tag.textContent = '{{' + header + '}}';
+        tag.textContent = '{{[' + header + ']}}';
         tag.onclick = () => insertTagIntoEditor(header);
         tagsWrapper.appendChild(tag);
       });
@@ -413,7 +444,7 @@
      * @param {string} header - The tag name to insert.
      */
     function insertTagIntoEditor(header) {
-      const tagString = '{{' + header + '}}';
+      const tagString = '{{[' + header + ']}}';
       const range = quillEditor.getSelection(true);
       if (range) {
         quillEditor.insertText(range.index, tagString, 'user');
@@ -476,6 +507,44 @@
      */
     function closeDataPreview() {
       document.getElementById('data-preview-modal').classList.remove('is-active');
+    }
+
+    /**
+     * Exports the current editor template to an HTML file.
+     */
+    function exportTemplate() {
+      const rawHtml = quillEditor.root.innerHTML;
+      if (!rawHtml || rawHtml === '<p><br></p>') {
+        showError("The template is empty.");
+        return;
+      }
+
+      const blob = new Blob([rawHtml], { type: "text/html;charset=utf-8" });
+      saveAs(blob, "template.html");
+    }
+
+    /**
+     * Imports a template from an uploaded HTML or text file.
+     * @param {Event} e - The file input change event.
+     */
+    function handleTemplateUpload(e) {
+      clearError();
+      const file = e.target.files[0];
+      if (!file) return;
+
+      document.getElementById('template-name-display').textContent = file.name;
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const text = event.target.result;
+        const delta = quillEditor.clipboard.convert(text);
+        quillEditor.setContents(delta, 'silent');
+        switchTab('editor');
+      };
+      reader.onerror = function(error) {
+        showError("Failed to read template file: " + error.message);
+      };
+      reader.readAsText(file);
     }
 
     /**
